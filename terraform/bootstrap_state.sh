@@ -3,6 +3,7 @@ set -euo pipefail
 
 USE_COLOR=true
 VALIDATE_ONLY=false
+VERBOSE=false
 
 if [[ ! -t 1 || -n "${NO_COLOR:-}" ]]; then
   USE_COLOR=false
@@ -51,6 +52,11 @@ print_header() {
   printf '\n%b== %s ==%b\n' "$C_BLUE" "$*" "$C_RESET"
 }
 
+log_verbose_detail() {
+  [[ "$VERBOSE" == "true" ]] || return 0
+  printf '    %s: %s\n' "$1" "$2"
+}
+
 die() {
   log_fail "$*"
   exit 1
@@ -80,7 +86,7 @@ usage() {
 Bootstraps minimum Azure resources for Terraform remote state.
 
 Usage:
-  ./bootstrap_state.sh [--dry-run|-n] [--validate-only] [dev|prod]
+  ./bootstrap_state.sh [--dry-run|-n] [--validate-only] [--verbose|-v] [dev|prod]
 
 Authentication (one of):
   - Existing Azure CLI login (az login)
@@ -100,6 +106,7 @@ Optional environment variables:
 Flags:
   -n, --dry-run                                  Print planned actions without making changes
   --validate-only                                Run stage 1 and stage 2 only, then exit
+  -v, --verbose                                  Print detailed Stage 1 configuration information
 
 Storage account naming notes:
   - Must be 3-24 chars, lowercase letters or numbers only
@@ -123,6 +130,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --validate-only)
       VALIDATE_ONLY=true
+      shift
+      ;;
+    -v|--verbose)
+      VERBOSE=true
       shift
       ;;
     dev|prod)
@@ -300,8 +311,22 @@ login_service_principal_if_needed() {
   fi
 }
 
+get_requested_subscription() {
+  printf '%s' "${ARM_SUBSCRIPTION_ID:-${AZURE_SUBSCRIPTION_ID:-}}"
+}
+
+detect_auth_mode() {
+  if [[ -n "${ARM_CLIENT_ID:-}" && -n "${ARM_CLIENT_SECRET:-}" && -n "${ARM_TENANT_ID:-}" ]]; then
+    printf '%s' "service-principal-env"
+    return 0
+  fi
+
+  printf '%s' "azure-cli-login"
+}
+
 set_subscription_if_provided() {
-  local subscription_id="${ARM_SUBSCRIPTION_ID:-${AZURE_SUBSCRIPTION_ID:-}}"
+  local subscription_id
+  subscription_id="$(get_requested_subscription)"
   if [[ -n "$subscription_id" ]]; then
     echo "Setting Azure subscription: $subscription_id"
     run_or_echo az account set --subscription "$subscription_id" --output none || \
@@ -311,6 +336,53 @@ set_subscription_if_provided() {
   if ! az account show --query id -o tsv >/dev/null 2>&1; then
     abort_with_missing_items "ARM_SUBSCRIPTION_ID or AZURE_SUBSCRIPTION_ID, or set default with 'az account set --subscription <id>'"
   fi
+}
+
+emit_verbose_configuration_details() {
+  local auth_mode requested_subscription storage_prefix_raw storage_prefix_sanitized storage_name_base
+
+  [[ "$VERBOSE" == "true" ]] || return 0
+
+  auth_mode="$(detect_auth_mode)"
+  requested_subscription="$(get_requested_subscription)"
+
+  print_header "Verbose configuration details"
+  log_verbose_detail "Environment" "$ENVIRONMENT"
+  log_verbose_detail "Dry run" "$DRY_RUN"
+  log_verbose_detail "Validate only" "$VALIDATE_ONLY"
+  log_verbose_detail "Azure location" "$LOCATION"
+  log_verbose_detail "Resource group" "$RESOURCE_GROUP"
+  log_verbose_detail "Container prefix" "$CONTAINER_PREFIX"
+  log_verbose_detail "Container name" "$CONTAINER_NAME"
+  log_verbose_detail "Authentication mode" "$auth_mode"
+
+  if [[ "$auth_mode" == "service-principal-env" ]]; then
+    log_verbose_detail "Service principal inputs" "ARM_CLIENT_ID, ARM_CLIENT_SECRET, and ARM_TENANT_ID are set"
+  fi
+
+  if [[ -n "$requested_subscription" ]]; then
+    log_verbose_detail "Requested subscription" "$requested_subscription"
+  else
+    log_verbose_detail "Requested subscription" "(using current Azure CLI default)"
+  fi
+
+  log_verbose_detail "Resolved subscription" "$CURRENT_SUBSCRIPTION"
+
+  if [[ -n "$STORAGE_ACCOUNT" ]]; then
+    log_verbose_detail "Storage account selection" "explicit"
+    log_verbose_detail "Storage account name" "$STORAGE_ACCOUNT"
+    return 0
+  fi
+
+  storage_prefix_raw="${TFSTATE_STORAGE_PREFIX:-tfstateafqs}"
+  storage_prefix_sanitized="$(sanitize_storage_name "$storage_prefix_raw")"
+  storage_name_base="$(compute_storage_name_base)"
+
+  log_verbose_detail "Storage account selection" "derived from naming prefix"
+  log_verbose_detail "Storage prefix (raw)" "$storage_prefix_raw"
+  log_verbose_detail "Storage prefix (sanitized)" "$storage_prefix_sanitized"
+  log_verbose_detail "Storage name base" "${storage_name_base}*"
+  log_verbose_detail "Storage name resolution" "Stage 2 will reuse an existing match in '$RESOURCE_GROUP' or generate a unique name"
 }
 
 resolve_current_subscription() {
@@ -574,6 +646,7 @@ stage_1_validate_inputs_and_configuration() {
   set_subscription_if_provided
   resolve_current_subscription
   log_ok "Azure subscription: ${CURRENT_SUBSCRIPTION}"
+  emit_verbose_configuration_details
 }
 
 stage_2_check_existing_resources() {
