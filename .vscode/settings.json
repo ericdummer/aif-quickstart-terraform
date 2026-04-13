@@ -1,5 +1,18 @@
 {
     "chat.tools.terminal.autoApprove": {
-        "az": true
+        "az": true,
+        "/^bash -n terraform/bootstrap_state\\.sh$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "terraform/bootstrap_state.sh": true,
+        "/^bash -n bootstrap_state\\.sh$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^\\./bootstrap_state\\.sh -n dev && bash -n bootstrap_state\\.sh$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }
