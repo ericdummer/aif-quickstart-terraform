@@ -1,0 +1,24 @@
+# Terraform local state and cache
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+*.tfplan
+
+# Real backend configs (contain sensitive storage account details)
+backends/*.hcl
+!backends/*.hcl.example
+
+# Real secret var files
+secrets/*.tfvars
+!secrets/*.tfvars.example
+
+# Crash log files
+crash.log
+crash.*.log
+
+# Override files (local dev only)
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

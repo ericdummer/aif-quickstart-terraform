@@ -1,0 +1,14 @@
+# Backend config template for the DEV environment.
+# Copy this file to backends/dev.hcl and fill in your values.
+# DO NOT commit the actual dev.hcl — it is gitignored.
+#
+# Usage:
+#   terraform init -backend-config=backends/dev.hcl
+
+resource_group_name  = "rg-tfstate-ed-af-quickstart"
+storage_account_name = "<your-storage-account-name>"
+container_name       = "tfstate-dev"
+key                  = "af-quickstart/dev.terraform.tfstate"
+
+# Optionally use a SAS token or managed identity instead of access_key:
+# use_azuread_auth = true

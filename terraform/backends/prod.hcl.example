@@ -1,0 +1,13 @@
+# Backend config template for the PROD environment.
+# Copy this file to backends/prod.hcl and fill in your values.
+# DO NOT commit the actual prod.hcl — it is gitignored.
+#
+# Usage:
+#   terraform init -backend-config=backends/prod.hcl
+
+resource_group_name  = "rg-tfstate-ed-af-quickstart"
+storage_account_name = "<your-storage-account-name>"
+container_name       = "tfstate-prod"
+key                  = "af-quickstart/prod.terraform.tfstate"
+
+# use_azuread_auth = true
