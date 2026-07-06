@@ -12,6 +12,7 @@ backends/*.hcl
 # Real secret var files
 secrets/*.tfvars
 !secrets/*.tfvars.example
+*.auto.tfvars
 
 # Crash log files
 crash.log
